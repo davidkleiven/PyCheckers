@@ -17,10 +17,11 @@ class PyCheckerGUI:
         self.screen = pg.display.set_mode((self.width,self.height))
         pg.display.set_caption("PyCheckers")
         self.pgclock = pg.time.Clock()
+        self.highlightedTiles = []
 
     def getTileSize( self ):
         return self.height/8
-        
+
     def drawTile( self, x, y, highlight=False ):
         tilewidth = self.getTileSize()
         tileheight = self.getTileSize()
@@ -52,11 +53,50 @@ class PyCheckerGUI:
                 self.drawTile(i,j)
 
         # Draw all the pieces
+        self.drawPieces()
+        pg.display.update()
+
+    def drawBoard( self ):
+        for i in range(0,8):
+            for j in range(0,8):
+                if ( [i,j] in self.highlightedTiles ):
+                    self.drawTile(i,j,highlight=True)
+                else:
+                    self.drawTile(i,j)
+
+    def drawPieces( self ):
         for piece in self.game.p1.pieces:
             piece.draw( self.screen, self.getTileSize(), self.getTileSize() )
         for piece in self.game.p2.pieces:
             piece.draw( self.screen, self.getTileSize(), self.getTileSize() )
-        pg.display.update()
+
+    def mouseClickHander( self ):
+        pos = pg.mouse.get_pos()
+
+        # Find tile
+        x = int( pos[0]/self.getTileSize() )
+        y = int( pos[1]/self.getTileSize() )
+
+        if ( isinstance(self.game.playerToMove.movePolicy, gm.HumanUser) ):
+
+            for piece in self.game.playerToMove.pieces:
+                if ( x==piece.x and y==piece.y ):
+                    self.highlightedTiles = []
+                    self.highlightedTiles.append([x,y])
+                    self.game.playerToMove.movePolicy.selectPiece(x,y)
+                    validMoves = piece.validMoves()
+                    self.highlightedTiles += validMoves
+                    break
+
+            self.game.playerToMove.movePolicy.selecteNewPosition(x,y)
+            if ( not self.game.playerToMove.movePolicy.selectedPiece is None and
+            not self.game.playerToMove.movePolicy.newPosition is None ):
+                self.game.stepGame()
+
+    def returnKeyHandler( self ):
+        if ( isinstance(self.game.playerToMove.movePolicy, gm.HumanUser) ):
+            return
+        self.game.stepGame()
 
     def play( self ):
         done = False
@@ -65,6 +105,15 @@ class PyCheckerGUI:
             for event in pg.event.get():
                 if ( event.type == pg.QUIT ):
                     done = True
+                elif ( event.type == pg.MOUSEBUTTONDOWN ):
+                    self.mouseClickHander()
+                elif ( event.type == pg.KEYDOWN):
+                    if ( event.key==pg.K_RETURN):
+                        self.returnKeyHandler()
+
+            self.drawBoard()
+            self.drawPieces()
+            pg.display.update()
             pg.display.flip()
             self.pgclock.tick(60)
         pg.quit()
