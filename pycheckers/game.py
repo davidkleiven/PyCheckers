@@ -7,13 +7,22 @@ class Player:
         self.pieces = []
         self.color = "white"
         self.movePolicy = RandomMover( self.pieces )
+        self.winner = False
 
     def setHumanUser( self ):
         self.movePolicy = HumanUser(self.pieces)
 
-class RandomMover:
+class MovePolicy():
     def __init__( self, pieces ):
+        self.state = "OK"
         self.pieces = pieces
+
+    def getMove( self ):
+        raise NotImplementedError( "Childs have to implement this function!" )
+
+class RandomMover(MovePolicy):
+    def __init__( self, pieces ):
+        super().__init__(pieces)
         pass
 
     def getMove( self ):
@@ -25,14 +34,23 @@ class RandomMover:
                 continue
             moveIndx = np.random.randint(0,high=len(validMoves))
             return self.pieces[pieceIndx], validMoves[moveIndx], catchTree
-        raise Exception( "Could not find a valid move in %d attempts..."%(maxIter))
+        self.state = "noAvailableMoves"
+        return [],[],None
 
-class HumanUser:
+class HumanUser(MovePolicy):
     def __init__( self, pieces ):
-        self.pieces = pieces
+        super().__init__(pieces)
         self.selectedPiece = None
         self.newPosition = None
         self.catchTree = None
+
+    def checkForAvailableMoves( self ):
+        moves = []
+        for piece in self.pieces:
+            moves, tree = piece.validMoves()
+            if ( len(moves) > 0 ):
+                return
+        self.state = "noAvailableMoves"
 
     def selectPiece( self, x, y ):
         for piece in self.pieces:
@@ -66,6 +84,7 @@ class Game:
         # Keep track of the last moves performed
         self.lastFrom = [0]*2
         self.lastTo = [0]*2
+        self.state = "playing"
 
     def setupGame( self ):
         # Fill board with empty
@@ -104,6 +123,14 @@ class Game:
 
     def stepGame( self ):
         piece, newmove, catchTree = self.playerToMove.movePolicy.getMove()
+
+        if ( self.playerToMove.movePolicy.state == "noAvailableMoves" ):
+            if ( self.playerToMove == self.p1 ):
+                self.p2.winner = True
+            else:
+                self.p1.winner = True
+            self.state = "finished"
+
         self.move( piece, newmove, catchTree )
 
         if ( isinstance(self.playerToMove.movePolicy, HumanUser) ):
@@ -116,7 +143,11 @@ class Game:
             self.playerToMove = self.p1
 
         if ( len(self.playerToMove.pieces) == 0 ):
-            print ("GAME OVER!")
+            self.state = "finished"
+            if ( self.playerToMove == self.p1 ):
+                self.p2.winner = True
+            else:
+                self.p1.winner = True
 
     def move( self, pieceToMove, newPosition, catchTree ):
         valid, tree = pieceToMove.validMoves()
@@ -129,7 +160,7 @@ class Game:
 
         if ( pieceCaptured ):
             moves = catchTree.getPath( newPosition[0], newPosition[1] )
-            print (moves)
+            print (pieceToMove.color, pieceToMove.name, moves)
             for i in range(0,len(moves)-1):
                 middleX = int( (moves[i][0]+moves[i+1][0])/2 )
                 middleY = int( (moves[i][1]+moves[i+1][1])/2 )
@@ -149,6 +180,7 @@ class Game:
         pieceToMove.y = newPosition[1]
         pc.Piece.board.setPiece( pieceToMove )
         pc.Piece.board.setPiece( copy )
+        #pc.Piece.board.save("lastState.csv")
 
         if ( pieceToMove.color == "white" and newPosition[1] == 7 ):
             self.playerToMove.pieces.remove(pieceToMove)

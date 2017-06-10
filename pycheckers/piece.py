@@ -134,6 +134,15 @@ class Board:
             print ("\n")
         print ("--------------------------------------------------------------")
 
+    def save( self, fname ):
+        out = open(fname, 'w')
+        for i in range(0,8):
+            for j in range(0,8):
+                out.write("%s(%s),"%(self.board[j][i].name, self.board[j][i].color))
+            out.write("\n")
+        out.close()
+        print ("Board state written to %s"%(fname))
+
 class Piece:
     board = Board() # All Pieces share the same board
 
@@ -311,12 +320,14 @@ class King(Piece):
             if ( counter >= maxIter ):
                 raise Exception("Infinite loop in search tree for valid moves in class %s"%(self.name))
             moveFound = False
+            print (current, current.move)
             # Check right of the current node
             for i in range(0,4):
                 if ( not current.checked[i] ):
                     current.checked[i] = True
                     newmove = self.findCatchMove( current.move[0], current.move[1], direction=directions[i] )
                     if ( len(newmove) > 0 and not tree.isInSearchTree(newmove) ):
+                        print (newmove)
                         newEntry = QuarticMoveTreeEntry()
                         newEntry.move = newmove
                         newEntry.parent = current
@@ -333,33 +344,35 @@ class King(Piece):
             if ( current is None ):
                 # Back to the root node
                 break
+            print (tree.toList())
         return tree
 
     def findCatchMove( self, x, y, direction="nw" ):
         if ( direction == "ne" ):
-            x1 = self.x + 1
-            y1 = self.y + 1
-            x2 = self.x + 2
-            y2 = self.y + 2
+            x1 = x + 1
+            y1 = y + 1
+            x2 = x + 2
+            y2 = y + 2
         elif ( direction == "se" ):
-            x1 = self.x+1
-            y1 = self.y-1
-            x2 = self.x+2
-            y2 = self.y-2
+            x1 = x+1
+            y1 = y-1
+            x2 = x+2
+            y2 = y-2
         elif ( direction == "sw" ):
-            x1 = self.x-1
-            y1 = self.y-1
-            x2 = self.x-2
-            y2 = self.y-2
+            x1 = x-1
+            y1 = y-1
+            x2 = x-2
+            y2 = y-2
         elif ( direction == "nw" ):
-            x1 = self.x-1
-            y1 = self.y+1
-            x2 = self.x-2
-            y2 = self.y+2
+            x1 = x-1
+            y1 = y+1
+            x2 = x-2
+            y2 = y+2
         else:
             raise Exception("Unknown direction in find path in class %s"%(self.name))
 
-        if ( self.board.isInside(x1,y1) and self.board.getPiece(x1,y1).color != self.color ):
+        if ( self.board.isInside(x1,y1) and self.board.getPiece(x1,y1).color != self.color and
+        self.board.getPiece(x1,y1).name != "empty"):
             if ( self.board.isInside(x2,y2) and self.board.getPiece(x2,y2).name == "empty" ):
                 return [x2,y2]
         return []

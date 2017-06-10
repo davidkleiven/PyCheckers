@@ -71,6 +71,8 @@ class PyCheckerGUI:
             piece.draw( self.screen, self.getTileSize(), self.getTileSize() )
 
     def mouseClickHander( self ):
+        if ( self.game.state == "finished" ):
+            return
         pos = pg.mouse.get_pos()
 
         # Find tile
@@ -96,7 +98,19 @@ class PyCheckerGUI:
     def returnKeyHandler( self ):
         if ( isinstance(self.game.playerToMove.movePolicy, gm.HumanUser) ):
             return
+        if ( self.game.state == "finished" ):
+            return
         self.game.stepGame()
+
+    def gameFinished( self ):
+        text = "It's a draw!"
+        if ( self.game.p1.winner ):
+            text = "Player: %s won"%(self.game.p1.name)
+        elif( self.game.p2.winner ):
+            text = "Player: %s won"%(self.game.p2.name)
+        font = pg.font.SysFont('Comic Sans MS', 30)
+        textsurface = font.render(text, False, (0, 0, 0))
+        self.screen.blit(textsurface,(0,0))
 
     def play( self ):
         try:
@@ -111,12 +125,14 @@ class PyCheckerGUI:
                     elif ( event.type == pg.KEYDOWN):
                         if ( event.key==pg.K_RETURN):
                             self.returnKeyHandler()
-
                 self.drawBoard()
                 self.drawPieces()
+                if ( self.game.state == "finished" ):
+                    self.gameFinished()
                 pg.display.update()
                 pg.display.flip()
                 self.pgclock.tick(60)
+                pg.image.save( self.screen, "lastState.jpg")
         except Exception as exc:
             print (str(exc))
 
