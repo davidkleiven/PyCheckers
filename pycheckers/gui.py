@@ -152,7 +152,7 @@ class PyCheckerGUI:
                     self.gameFinished()
                 pg.display.update()
                 pg.display.flip()
-                self.pgclock.tick(1)
+                self.pgclock.tick(10)
                 if ( self.saveLastState ):
                     pg.image.save( self.screen, "lastState.jpg")
         except Exception as exc:

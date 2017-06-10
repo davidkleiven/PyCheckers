@@ -149,6 +149,11 @@ class Board:
         out.close()
         print ("Board state written to %s"%(fname))
 
+    def checkConsistency( self, player ):
+        for piece in player.pieces:
+            if ( piece != self.getPiece(piece.x,piece.y) ):
+                raise Exception("Player %s and board does not show the same!"%(player.name))
+
 class Piece:
     board = Board() # All Pieces share the same board
 
