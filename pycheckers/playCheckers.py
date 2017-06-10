@@ -6,6 +6,7 @@ def main():
     app.game.p1.setHumanUser()
     app.game.p1.name = "David Kleiven"
     app.game.p2.name = "Computer"
+    app.saveLastState = True
     app.play()
 
 if __name__ == "__main__":

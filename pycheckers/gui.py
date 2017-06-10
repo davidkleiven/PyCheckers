@@ -11,6 +11,7 @@ class PyCheckerGUI:
         self.highlightColor = (254,196,79)
         self.width = 700
         self.height = 500
+        self.saveLastState = False
 
         # Initialize pygame
         pg.init()
@@ -112,6 +113,20 @@ class PyCheckerGUI:
         textsurface = font.render(text, False, (0, 0, 0))
         self.screen.blit(textsurface,(0,0))
 
+    def updateMoveNumber( self ):
+        posX = 8*self.getTileSize()+10
+        posY = self.getTileSize()
+        height = 80
+        width = 200
+        pg.draw.rect( self.screen, (0,0,0), (posX, posY, width, height) )
+        font = pg.font.SysFont('Comic Sans MS', 60)
+        text = "Move: %d"%(self.game.numberOfTurns)
+        textsurface = font.render(text, False, (77,175,74))
+        self.screen.blit(textsurface,(posX, posY))
+
+    def hasHumanUser( self ):
+        return isinstance( self.game.p1.movePolicy, gm.HumanUser ) or isinstance( self.game.p2.movePolicy, gm.HumanUser )
+
     def play( self ):
         try:
             done = False
@@ -125,14 +140,21 @@ class PyCheckerGUI:
                     elif ( event.type == pg.KEYDOWN):
                         if ( event.key==pg.K_RETURN):
                             self.returnKeyHandler()
+
+                if ( not self.hasHumanUser() ):
+                    self.game.stepGame()
+                    if ( self.game.state == "finished" ):
+                        done = True
                 self.drawBoard()
                 self.drawPieces()
+                self.updateMoveNumber()
                 if ( self.game.state == "finished" ):
                     self.gameFinished()
                 pg.display.update()
                 pg.display.flip()
-                self.pgclock.tick(60)
-                pg.image.save( self.screen, "lastState.jpg")
+                self.pgclock.tick(1)
+                if ( self.saveLastState ):
+                    pg.image.save( self.screen, "lastState.jpg")
         except Exception as exc:
             print (str(exc))
 

@@ -11,6 +11,13 @@ class MoveTree:
             moves.append( self.entries[i].move )
         return moves
 
+    def hasDuplicates( self ):
+        for i in range(0,len(self.entries) ):
+            for j in range(i+1,len(self.entries)):
+                if ( self.entries[i] == self.entries[j] ):
+                    return True
+        return False
+
     def clean( self ):
         for entry in self.entries:
             entry.nTimesVisited = 0
@@ -41,7 +48,6 @@ class QuarticMoveTree(MoveTree):
                 raise Exception("Infinite loop when searching for path in quartic move tree")
 
             proceedToNextLevel = False
-            print (current)
             for i in range(0,4):
                 if ( not current.checked[i] ):
                     current.checked[i] = True
@@ -57,7 +63,7 @@ class QuarticMoveTree(MoveTree):
             if ( proceedToNextLevel ):
                 continue
 
-            #del moves[-1]
+            del moves[-1]
             current = current.parent
             if ( current is None ):
                 raise Exception("Error! Did not find path to for the current move")
@@ -311,23 +317,20 @@ class King(Piece):
         tree.entries.append(rootMove)
 
         current = rootMove
-        maxIter = 10
+        maxIter = 1000
         counter = 0
         directions = ["ne", "se", "sw", "nw"]
-        print ("-----------------")
         while ( True ):
             counter += 1
             if ( counter >= maxIter ):
                 raise Exception("Infinite loop in search tree for valid moves in class %s"%(self.name))
             moveFound = False
-            print (current, current.move)
             # Check right of the current node
             for i in range(0,4):
                 if ( not current.checked[i] ):
                     current.checked[i] = True
                     newmove = self.findCatchMove( current.move[0], current.move[1], direction=directions[i] )
                     if ( len(newmove) > 0 and not tree.isInSearchTree(newmove) ):
-                        print (newmove)
                         newEntry = QuarticMoveTreeEntry()
                         newEntry.move = newmove
                         newEntry.parent = current
@@ -344,7 +347,7 @@ class King(Piece):
             if ( current is None ):
                 # Back to the root node
                 break
-            print (tree.toList())
+        assert( not tree.hasDuplicates() )
         return tree
 
     def findCatchMove( self, x, y, direction="nw" ):

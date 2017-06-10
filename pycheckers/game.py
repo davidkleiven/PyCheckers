@@ -35,7 +35,7 @@ class RandomMover(MovePolicy):
             moveIndx = np.random.randint(0,high=len(validMoves))
             return self.pieces[pieceIndx], validMoves[moveIndx], catchTree
         self.state = "noAvailableMoves"
-        return [],[],None
+        return None,[],None
 
 class HumanUser(MovePolicy):
     def __init__( self, pieces ):
@@ -80,11 +80,21 @@ class Game:
         self.p1.color = "white"
         self.p2.color = "black"
         self.playerToMove = self.p1
+        self.maxTurns = 1000
+        self.numberOfTurns = 0
 
         # Keep track of the last moves performed
         self.lastFrom = [0]*2
         self.lastTo = [0]*2
         self.state = "playing"
+
+    def printResult( self ):
+        if ( self.p1.winner ):
+            print ("Player: %s won"%(self.p1.name))
+        elif ( self.p2.winner ):
+            print ("Player: %s won"%(self.p2.name) )
+        else:
+            print ("Ended with draw!")
 
     def setupGame( self ):
         # Fill board with empty
@@ -122,6 +132,7 @@ class Game:
         #pc.Piece.board.printOut()
 
     def stepGame( self ):
+        self.numberOfTurns += 1
         piece, newmove, catchTree = self.playerToMove.movePolicy.getMove()
 
         if ( self.playerToMove.movePolicy.state == "noAvailableMoves" ):
@@ -148,8 +159,12 @@ class Game:
                 self.p2.winner = True
             else:
                 self.p1.winner = True
+        if ( self.numberOfTurns >= self.maxTurns ):
+            self.state = "finished"
 
     def move( self, pieceToMove, newPosition, catchTree ):
+        if ( pieceToMove is None ):
+            return
         valid, tree = pieceToMove.validMoves()
         if ( not newPosition in valid ):
             print ("The suggested move is not valid!")
@@ -160,17 +175,28 @@ class Game:
 
         if ( pieceCaptured ):
             moves = catchTree.getPath( newPosition[0], newPosition[1] )
-            print (pieceToMove.color, pieceToMove.name, moves)
             for i in range(0,len(moves)-1):
                 middleX = int( (moves[i][0]+moves[i+1][0])/2 )
                 middleY = int( (moves[i][1]+moves[i+1][1])/2 )
                 newEmptyPiece = pc.Piece()
                 newEmptyPiece.x = middleX
                 newEmptyPiece.y = middleY
+                pieceToRemove = pc.Piece.board.getPiece(middleX,middleY)
+                if ( pieceToRemove.name == "empty" or pieceToRemove.color == pieceToMove.color ):
+                    print ("==== ERROR INFORMATION ======")
+                    print (moves)
+                    print (pieceToRemove.x, pieceToRemove.y )
+                    print (pieceToMove.x, pieceToMove.y )
+                    print (pieceToMove.color, pieceToRemove.color )
+                    print (pieceToMove.name, pieceToMove.name )
+                    pc.Piece.board.save( "boardError.csv" )
+                    print ("Abort! Error when removing piece")
+                    exit()
+
                 if ( self.playerToMove == self.p1 ):
-                    self.p2.pieces.remove( pc.Piece.board.getPiece(middleX,middleY) )
+                    self.p2.pieces.remove( pieceToRemove )
                 else:
-                    self.p1.pieces.remove( pc.Piece.board.getPiece(middleX,middleY) )
+                    self.p1.pieces.remove( pieceToRemove )
                 pc.Piece.board.setPiece( newEmptyPiece )
 
         copy = pc.Piece.board.getPiece( newPosition[0], newPosition[1] )
