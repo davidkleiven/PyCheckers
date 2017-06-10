@@ -124,8 +124,11 @@ class Network:
         based on the gradient descent method
         """
         gradDiff = self.gradient - self.previousGradient
-        gamma = ( self.newValues - self.previousValues ).dot(gradDiff)
-        gamma /= np.sum(gradDiff**2)
+        if ( np.sum(gradDiff**2) < 1E-7 ):
+            gamma = 0.0
+        else:
+            gamma = ( self.newValues - self.previousValues ).dot(gradDiff)
+            gamma /= np.sum(gradDiff**2)
 
         self.previousValues[:] = self.newValues[:]
         self.newValues = self.newValues - gamma*self.gradient

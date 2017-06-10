@@ -83,7 +83,7 @@ class Game:
         self.p2.name = "Player 2"
         self.p1.color = "white"
         self.p2.color = "black"
-        self.playerToMove = self.p1
+        self.playerToMove = self.p2
         self.maxTurns = 1000
         self.numberOfTurns = 0
 

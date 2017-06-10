@@ -18,7 +18,7 @@ def main( argv ):
         network = pck.load( networkfile )
     except Exception as exc:
         print (str(exc))
-        neurons = [5*64,int(0.05*5*64),1]
+        neurons = [5*64,5*64*0.66,1]
         network = nn.Network( neurons )
     network.visualize()
     plt.show()
@@ -30,6 +30,12 @@ def main( argv ):
         print ("Run for: %d min. End at %d min.  Weights updated: %d times   "%(diffSec/60, float(argv[0])*60,numberOfWeightUpdates), end="\r")
         game = gm.Game()
         game.setupGame()
+
+        # Perform 10 random moves
+        for i in range(0,10):
+            game.stepGame()
+
+        # Change to neural network players
         game.p1.setNeuralNetwork( network, game )
         game.p2.setNeuralNetwork( network, game )
         while ( game.state != "finished" ):
