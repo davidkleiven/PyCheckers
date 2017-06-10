@@ -84,7 +84,7 @@ class PyCheckerGUI:
                     self.highlightedTiles = []
                     self.highlightedTiles.append([x,y])
                     self.game.playerToMove.movePolicy.selectPiece(x,y)
-                    validMoves = piece.validMoves()
+                    validMoves, catchTree = piece.validMoves()
                     self.highlightedTiles += validMoves
                     break
 
@@ -99,21 +99,25 @@ class PyCheckerGUI:
         self.game.stepGame()
 
     def play( self ):
-        done = False
-        self.initBoard()
-        while ( not done ):
-            for event in pg.event.get():
-                if ( event.type == pg.QUIT ):
-                    done = True
-                elif ( event.type == pg.MOUSEBUTTONDOWN ):
-                    self.mouseClickHander()
-                elif ( event.type == pg.KEYDOWN):
-                    if ( event.key==pg.K_RETURN):
-                        self.returnKeyHandler()
+        try:
+            done = False
+            self.initBoard()
+            while ( not done ):
+                for event in pg.event.get():
+                    if ( event.type == pg.QUIT ):
+                        done = True
+                    elif ( event.type == pg.MOUSEBUTTONDOWN ):
+                        self.mouseClickHander()
+                    elif ( event.type == pg.KEYDOWN):
+                        if ( event.key==pg.K_RETURN):
+                            self.returnKeyHandler()
 
-            self.drawBoard()
-            self.drawPieces()
-            pg.display.update()
-            pg.display.flip()
-            self.pgclock.tick(60)
+                self.drawBoard()
+                self.drawPieces()
+                pg.display.update()
+                pg.display.flip()
+                self.pgclock.tick(60)
+        except Exception as exc:
+            print (str(exc))
+
         pg.quit()

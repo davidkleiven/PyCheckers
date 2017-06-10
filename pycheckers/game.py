@@ -20,12 +20,12 @@ class RandomMover:
         maxIter = 1000
         for i in range(0,maxIter):
             pieceIndx = np.random.randint(0, high=len(self.pieces) )
-            validMoves = self.pieces[pieceIndx].validMoves()
+            validMoves, catchTree = self.pieces[pieceIndx].validMoves()
             print (self.pieces[pieceIndx].x, self.pieces[pieceIndx].y, validMoves)
             if ( len(validMoves) == 0 ):
                 continue
             moveIndx = np.random.randint(0,high=len(validMoves))
-            return self.pieces[pieceIndx], validMoves[moveIndx]
+            return self.pieces[pieceIndx], validMoves[moveIndx], catchTree
         raise Exception( "Could not find a valid move in %d attempts..."%(maxIter))
 
 class HumanUser:
@@ -33,6 +33,7 @@ class HumanUser:
         self.pieces = pieces
         self.selectedPiece = None
         self.newPosition = None
+        self.catchTree = None
 
     def selectPiece( self, x, y ):
         for piece in self.pieces:
@@ -42,7 +43,8 @@ class HumanUser:
     def selecteNewPosition( self, x, y ):
         if ( self.selectedPiece is None ):
             return
-        if ( [x,y] in self.selectedPiece.validMoves() ):
+        valid, self.catchTree = self.selectedPiece.validMoves()
+        if ( [x,y] in valid ):
             self.newPosition = [x,y]
 
     def getMove( self ):
@@ -50,7 +52,7 @@ class HumanUser:
             raise Exception( "No piece is selected!" )
         if ( self.newPosition is None ):
             raise Exception("No new position is selected!")
-        return self.selectedPiece, self.newPosition
+        return self.selectedPiece, self.newPosition, self.catchTree
 
 class Game:
     def __init__( self ):
@@ -102,8 +104,8 @@ class Game:
         #pc.Piece.board.printOut()
 
     def stepGame( self ):
-        piece, newmove = self.playerToMove.movePolicy.getMove()
-        self.move( piece, newmove )
+        piece, newmove, catchTree = self.playerToMove.movePolicy.getMove()
+        self.move( piece, newmove, catchTree )
 
         if ( isinstance(self.playerToMove.movePolicy, HumanUser) ):
             self.playerToMove.movePolicy.selectedPiece = None
@@ -114,11 +116,12 @@ class Game:
         else:
             self.playerToMove = self.p1
 
-        if ( len(playerToMove.pieces) == 0 ):
+        if ( len(self.playerToMove.pieces) == 0 ):
             print ("GAME OVER!")
 
-    def move( self, pieceToMove, newPosition ):
-        if ( not newPosition in pieceToMove.validMoves() ):
+    def move( self, pieceToMove, newPosition, catchTree ):
+        valid, tree = pieceToMove.validMoves()
+        if ( not newPosition in valid ):
             print ("The suggested move is not valid!")
             return
         pieceCaptured = np.abs( newPosition[1] - pieceToMove.y ) > 1
@@ -126,16 +129,18 @@ class Game:
         lastTo = newPosition
 
         if ( pieceCaptured ):
-            middleX = int( (newPosition[0]+pieceToMove.x)/2 )
-            middleY = int( (newPosition[1]+pieceToMove.y)/2 )
-            newEmptyPiece = pc.Piece()
-            newEmptyPiece.x = middleX
-            newEmptyPiece.y = middleY
-            if ( self.playerToMove == self.p1 ):
-                self.p2.pieces.remove( pc.Piece.board.getPiece(middleX,middleY) )
-            else:
-                self.p1.pieces.remove( pc.Piece.board.getPiece(middleX,middleY) )
-            pc.Piece.board.setPiece( newEmptyPiece )
+            moves = catchTree.getPath( newPosition[0], newPosition[1] )
+            for i in range(0,len(moves)-1):
+                middleX = int( (moves[i][0]+moves[i+1][0])/2 )
+                middleY = int( (moves[i][1]+moves[i+1][1])/2 )
+                newEmptyPiece = pc.Piece()
+                newEmptyPiece.x = middleX
+                newEmptyPiece.y = middleY
+                if ( self.playerToMove == self.p1 ):
+                    self.p2.pieces.remove( pc.Piece.board.getPiece(middleX,middleY) )
+                else:
+                    self.p1.pieces.remove( pc.Piece.board.getPiece(middleX,middleY) )
+                pc.Piece.board.setPiece( newEmptyPiece )
 
         copy = pc.Piece.board.getPiece( newPosition[0], newPosition[1] )
         copy.x = pieceToMove.x
@@ -144,3 +149,18 @@ class Game:
         pieceToMove.y = newPosition[1]
         pc.Piece.board.setPiece( pieceToMove )
         pc.Piece.board.setPiece( copy )
+
+        if ( pieceToMove.color == "white" and newPosition[1] == 7 ):
+            self.playerToMove.pieces.remove(pieceToMove)
+            newKing = pc.King()
+            newKing.color = "white"
+            newKing.x = newPosition[0]
+            newKing.y = newPosition[1]
+            self.playerToMove.pieces.append(newKing)
+        elif ( pieceToMove.color == "black" and newPosition[1] == 0 ):
+            self.playerToMove.pieces.remove(pieceToMove)
+            newKing = pc.King()
+            newKing.color = "black"
+            newKing.x = newPosition[0]
+            newKing.y = newPosition[1]
+            self.playerToMove.pieces.append( newKing )
