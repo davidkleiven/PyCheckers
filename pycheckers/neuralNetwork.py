@@ -8,6 +8,9 @@ class Neuron:
         self.threshold = 1.0
 
     def evaluate( self, inputState ):
+        """
+        Evaluates the parameter z that is sent to the sigmoid function sigma(z) = 1/(1+exp(-z))
+        """
         return np.sum( self.weights*inputState ) - self.threshold
 
 class Layer:
@@ -17,15 +20,24 @@ class Layer:
             self.neurons.append( Neuron(int(nIn)) )
 
     def evaluate( self, inputState ):
+        """
+        Evaluates the output vector of the current layer
+        """
         output = np.zeros(len(self.neurons) )
         for i in range(0,len(self.neurons) ):
             output[i] = self.sigmoid( self.neurons[i].evaluate(inputState) )
         return output
 
     def sigmoid( self, z ):
+        """
+        Sigmoid function used as activation function for the neurons
+        """
         return 1.0/( 1.0 + np.exp(-z) )
 
     def visualize( self, ax ):
+        """
+        Plot subfigure corresponding to the current layer
+        """
         values = np.zeros((len(self.neurons),len(self.neurons[0].weights)))
         for i in range(0,len(self.neurons)):
             values[i,:] = self.neurons[i].weights
@@ -38,13 +50,11 @@ class Network:
         for i in range(0,len(numberOfNeurons)-1):
             self.layers.append( Layer( int(numberOfNeurons[i]), int(numberOfNeurons[i+1]) ) )
         self.learningRate = 0.1
-        self.prevValue = 0.5
-        self.currentLayer = 0
-        self.currentNeuron = 0
-        self.currentWeight = 0
-        self.relativeWeightPertubation = 0.3
-        self.alterThreshold = False
+        self.stepsize = 0.5
         self.gradient = np.zeros( self.getNumberOfParameters() )
+        self.previousGradient = np.zeros( self.getNumberOfParameters() )
+        self.previousValues = np.zeros( self.getNumberOfParameters() )
+        self.newValues = self.collectParameters()
         self.currentIndx = 0
         self.previousCostFunction = 1.0
         self.hasNewWeights = True
@@ -57,72 +67,86 @@ class Network:
         return nParams
 
     def evaluate( self, inputState ):
+        """
+        Evaluates the entire neural network. Returns a scalar value describing the "goodness" if the board state
+        """
         output = self.layers[0].evaluate(inputState)
         for i in range(1,len(self.layers)):
             output = self.layers[i].evaluate(output)
         return output[0]
 
     def save( self, fname ):
+        """
+        Dumps the current network to a pickle file
+        """
         out = open(fname, 'wb' )
         pck.dump( self, out )
         out.close()
 
-    def updateGradient( self, newCostFuncValue ):
-        change = (newCostFuncValue - self.previousCostFunction)
-        self.gradient[self.currentIndx] = change/(self.relativeWeightPertubation*self.prevValue)
-        self.currentIndx += 1
-
-        # Reset the value
-        if ( self.alterThreshold ):
-            self.layers[self.currentLayer].neurons[self.currentNeuron].threshold = self.prevValue
-        else:
-            self.layers[self.currentLayer].neurons[self.currentNeuron].weights[self.currentWeight]= self.prevValue
-
-        self.currentWeight += 1
-        if ( self.currentWeight >= len(self.layers[self.currentLayer].neurons[self.currentNeuron].weights) ):
-            self.alterThreshold = True
-        else:
-            self.alterThreshold = False
-            self.currentWeight = 0
-            self.currentNeuron += 1
-
-        if ( self.currentNeuron >= len(self.layers[self.currentLayer].neurons) ):
-            self.currentLayer += 1
-            self.currentNeuron = 0
-            self.currentWeight = 0
-
-        if ( self.currentLayer >= len(self.layers) ):
-            self.currentLayer = 0
-            self.currentNeuron = 0
-            self.currentWeight = 0
-            self.updateWeights()
-
-        if ( self.currentIndx >= len(self.gradient) ):
-            raise Exception("The gradient has the wrong length")
-
-    def updateWeights( self ):
-        startIndx = 0
+    def collectParameters( self ):
+        """
+        Collects all weights and threshold in a single vector
+        """
+        params = np.zeros( self.getNumberOfParameters() )
+        current = 0
         for layer in self.layers:
             for neuron in layer.neurons:
-                grad = self.gradient[startIndx:startIndx+len(neuron.weights)]
-                dw = self.relativeWeightPertubation*neuron.weights
-                neuron.weights += self.learningRate*grad*dw
-                grad = self.gradient[startIndx+len(neuron.weights)]
-                deltaThres = self.relativeWeightPertubation*neuron.threshold
-                neuron.threshold += self.learningRate*grad*deltaThres
-                startIndx += startIndx+len(neuron.weights)+1
+                params[current:current+len(neuron.weights)] = neuron.weights
+                params[current+len(neuron.weights)] = neuron.threshold
+                current += len(neuron.weights)+1
+        return params
+
+    def distribute( self, newvalues ):
+        """
+        Distributes the values in the vector newvalues to the weights and threshold in the neural network
+        """
+        current = 0
+        assert( len(newvalues) == self.getNumberOfParameters() )
+        for layer in self.layers:
+            for neuron in layer.neurons:
+                neuron.weights = newvalues[current:current+len(neuron.weights)]
+                neuron.threshold = newvalues[current+len(neuron.weights)]
+                current += len(neuron.weights)+1
+
+    def updateGradient( self, newCostFuncValue ):
+        """
+        Updates the gradient based on the current value of the cost function
+        """
+        change = (newCostFuncValue - self.previousCostFunction)
+        self.gradient[self.currentIndx] = change/(self.stepsize)
+        self.currentIndx += 1
+        if ( self.currentIndx >= len(self.gradient) ):
+            self.updateWeights()
+
+    def updateWeights( self ):
+        """
+        When the full gradient has been determined, this function updates all the weights and thresholds
+        based on the gradient descent method
+        """
+        gradDiff = self.gradient - self.previousGradient
+        gamma = ( self.newValues - self.previousValues ).dot(gradDiff)
+        gamma /= np.sum(gradDiff**2)
+
+        self.previousValues[:] = self.newValues[:]
+        self.newValues = self.newValues - gamma*self.gradient
+        self.previousGradient[:] = self.gradient[:]
         self.currentIndx = 0
         self.hasNewWeights = True
+        self.distribute( self.newValues )
 
     def perturbNext( self ):
-        if ( not self.alterThreshold ):
-            self.prevValue = self.layers[self.currentLayer].neurons[self.currentNeuron].weights[self.currentWeight]
-            self.layers[self.currentLayer].neurons[self.currentNeuron].weights[self.currentWeight] += self.relativeWeightPertubation*self.prevValue
-        else:
-            self.prevValue = self.layers[self.currentLayer].neurons[self.currentNeuron].threshold
-            self.layers[self.currentLayer].neurons[self.currentNeuron].threshold += 0.3*self.prevValue
+        """
+        Modifies the next weight/threshold. Successive calls to this function will eventually vary all the
+        weights and thresholds in the network
+        """
+        if ( self.currentIndx > 0 ):
+            self.newValues[self.currentIndx-1] -= self.stepsize
+        self.newValues[self.currentIndx] += self.stepsize
 
     def visualize( self ):
+        """
+        Create figure showing all the weights. Each subfigure corresponds to one layer
+        """
         nLayers = len(self.layers)
         ncols = int(np.sqrt(nLayers))+1
         fig = plt.figure()

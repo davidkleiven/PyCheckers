@@ -18,7 +18,7 @@ def main( argv ):
         network = pck.load( networkfile )
     except Exception as exc:
         print (str(exc))
-        neurons = [5*64,int(0.66*5*64),1]
+        neurons = [5*64,int(0.05*5*64),1]
         network = nn.Network( neurons )
     network.visualize()
     plt.show()
@@ -37,9 +37,9 @@ def main( argv ):
 
         costFunc = 0.0
         if ( game.p1.winner ):
-            costFunc = 1.0
-        elif ( game.p2.winner ):
             costFunc = -1.0
+        elif ( game.p2.winner ):
+            costFunc = 1.0
         else:
             costFunc = 0.0
 
