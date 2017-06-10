@@ -21,7 +21,6 @@ class RandomMover:
         for i in range(0,maxIter):
             pieceIndx = np.random.randint(0, high=len(self.pieces) )
             validMoves, catchTree = self.pieces[pieceIndx].validMoves()
-            print (self.pieces[pieceIndx].x, self.pieces[pieceIndx].y, validMoves)
             if ( len(validMoves) == 0 ):
                 continue
             moveIndx = np.random.randint(0,high=len(validMoves))
@@ -130,6 +129,7 @@ class Game:
 
         if ( pieceCaptured ):
             moves = catchTree.getPath( newPosition[0], newPosition[1] )
+            print (moves)
             for i in range(0,len(moves)-1):
                 middleX = int( (moves[i][0]+moves[i+1][0])/2 )
                 middleY = int( (moves[i][1]+moves[i+1][1])/2 )

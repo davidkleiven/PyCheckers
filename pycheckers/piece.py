@@ -19,44 +19,45 @@ class QuarticMoveTree(MoveTree):
     def __init__( self ):
         super().__init__()
 
+    def clean( self ):
+        for entry in self.entries:
+            entry.checked = [False,False,False,False]
+    def isInSearchTree( self, newmove ):
+        for entry in self.entries:
+            if ( newmove == entry.move ):
+                return True
+        return False
+
     def getPath( self, x, y ):
         moves = []
         current = self.entries[0]
         self.clean()
-        moves.append(current.move)
+        #moves.append(current.move)
         maxIter = 1000
         counter = 0
         while ( True ):
             counter += 1
             if ( counter >= maxIter ):
                 raise Exception("Infinite loop when searching for path in quartic move tree")
-            current.nTimesVisited += 1
-            if ( not current.northeast is None and current.nTimesVisited == 1 ):
-                moves.append(current.move)
-                if ( moves[-1][0] == x and moves[-1][1] == y ):
-                    return moves
-                current = current.northeast
-                continue
-            if ( not current.northwest is None and current.nTimesVisited <= 2 ):
-                moves.append(current.move)
-                if ( moves[-1][0] == x and moves[-1][1] == y ):
-                    return moves
-                current = current.northwest
-                continue
-            if ( not current.southeast is None and current.nTimesVisited <= 3 ):
-                moves.append(current.move)
-                if ( moves[-1][0] == x and moves[-1][1] == y ):
-                    return moves
-                current = current.southeast
-                continue
-            if ( not current.southwest is None and current.nTimesVisited <= 4 ):
-                moves.append(current.move)
-                if ( moves[-1][0] == x and moves[-1][1] == y ):
-                    return moves
-                current = current.southwest
+
+            proceedToNextLevel = False
+            print (current)
+            for i in range(0,4):
+                if ( not current.checked[i] ):
+                    current.checked[i] = True
+                    moves.append(current.move)
+                    if ( moves[-1][0] == x and moves[-1][1] == y ):
+                        return moves
+                    if ( current.branches[i] is None ):
+                        del moves[-1]
+                    else:
+                        current = current.branches[i]
+                        proceedToNextLevel = True
+                        break
+            if ( proceedToNextLevel ):
                 continue
 
-            del moves[-1]
+            #del moves[-1]
             current = current.parent
             if ( current is None ):
                 raise Exception("Error! Did not find path to for the current move")
@@ -106,13 +107,11 @@ class BinaryMoveTreeEntry:
 
 class QuarticMoveTreeEntry:
     def __init__(self):
-        self.northeast = None
-        self.southeast = None
-        self.southwest = None
-        self.northwest = None
+        self.branches = [None,None,None,None]
         self.parent = None
         self.move = []
         self.nTimesVisited = 0
+        self.checked = [False,False,False,False]
 
 class Board:
     def __init__(self):
@@ -148,7 +147,6 @@ class Piece:
         allMoves = []
         allMoves =  self.validRegularMoves()
         catchMoves =  self.validCatchMoves()
-        print (allMoves,catchMoves.toList())
         allMoves += catchMoves.toList()
         return allMoves, catchMoves
 
@@ -224,7 +222,6 @@ class Man( Piece ):
 
             # Check left node
             if ( current.nTimesVisited == 2 or current.nTimesVisited == 1 ):
-                print ("here")
                 newmove = self.findCatchMove( current.move[0], current.move[1], False )
                 if ( len(newmove) > 0 ):
                     newEntry = BinaryMoveTreeEntry()
@@ -305,64 +302,36 @@ class King(Piece):
         tree.entries.append(rootMove)
 
         current = rootMove
-        maxIter = 1000
+        maxIter = 10
         counter = 0
+        directions = ["ne", "se", "sw", "nw"]
+        print ("-----------------")
         while ( True ):
             counter += 1
             if ( counter >= maxIter ):
                 raise Exception("Infinite loop in search tree for valid moves in class %s"%(self.name))
-            current.nTimesVisited += 1
+            moveFound = False
             # Check right of the current node
-            if ( current.nTimesVisited == 1 ):
-                newmove = self.findCatchMove( current.move[0], current.move[1], direction="ne" )
-                if ( len(newmove) > 0 ):
-                    newEntry = QuarticMoveTreeEntry()
-                    newEntry.move = newmove
-                    newEntry.parent = current
-                    current.northeast = newEntry
-                    current = newEntry
-                    tree.entries.append(current)
-                    continue
-
-            # Check left node
-            if ( current.nTimesVisited <= 2 ):
-                newmove = self.findCatchMove( current.move[0], current.move[1], direction="se" )
-                if ( len(newmove) > 0 ):
-                    newEntry = QuarticMoveTreeEntry()
-                    newEntry.move = newmove
-                    newEntry.parent = current
-                    current.southeast = newEntry
-                    current = newEntry
-                    tree.entries.append(current)
-                    continue
-
-            if ( current.nTimesVisited <= 3 ):
-                newmove = self.findCatchMove( current.move[0], current.move[1], direction="sw" )
-                if ( len(newmove) > 0 ):
-                    newEntry = QuarticMoveTreeEntry()
-                    newEntry.move = newmove
-                    newEntry.parent = current
-                    current.southwest = newEntry
-                    current = newEntry
-                    tree.entries.append(current)
-                    continue
-
-            if ( current.nTimesVisited <= 4 ):
-                newmove = self.findCatchMove( current.move[0], current.move[1], direction="nw" )
-                if ( len(newmove) > 0 ):
-                    newEntry = QuarticMoveTreeEntry()
-                    newEntry.move = newmove
-                    newEntry.parent = current
-                    current.northwest = newEntry
-                    current = newEntry
-                    tree.entries.append(current)
-                    continue
+            for i in range(0,4):
+                if ( not current.checked[i] ):
+                    current.checked[i] = True
+                    newmove = self.findCatchMove( current.move[0], current.move[1], direction=directions[i] )
+                    if ( len(newmove) > 0 and not tree.isInSearchTree(newmove) ):
+                        newEntry = QuarticMoveTreeEntry()
+                        newEntry.move = newmove
+                        newEntry.parent = current
+                        current.branches[i] = newEntry
+                        current = newEntry
+                        tree.entries.append(current)
+                        moveFound = True
+                        break
+            if ( moveFound ):
+                continue
 
             # If it enters here go back to parent
             current = current.parent
             if ( current is None ):
-                break
-            if ( current == rootMove and rootMove.nTimesVisited == 5 ):
+                # Back to the root node
                 break
         return tree
 
@@ -382,11 +351,13 @@ class King(Piece):
             y1 = self.y-1
             x2 = self.x-2
             y2 = self.y-2
-        else:
+        elif ( direction == "nw" ):
             x1 = self.x-1
             y1 = self.y+1
             x2 = self.x-2
             y2 = self.y+2
+        else:
+            raise Exception("Unknown direction in find path in class %s"%(self.name))
 
         if ( self.board.isInside(x1,y1) and self.board.getPiece(x1,y1).color != self.color ):
             if ( self.board.isInside(x2,y2) and self.board.getPiece(x2,y2).name == "empty" ):
