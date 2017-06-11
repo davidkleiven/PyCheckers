@@ -16,6 +16,9 @@ class Player:
     def setNeuralNetwork( self, network, game ):
         self.movePolicy = CleverMover( self.pieces, network, game )
 
+    def setRandomPolicy( self ):
+        self.movePolicy = RandomMover( self.pieces )
+
 class MovePolicy():
     def __init__( self, pieces ):
         self.state = "OK"
@@ -83,8 +86,8 @@ class Game:
         self.p2.name = "Player 2"
         self.p1.color = "white"
         self.p2.color = "black"
-        self.playerToMove = self.p2
-        self.maxTurns = 1000
+        self.playerToMove = self.p1
+        self.maxTurns = 200
         self.numberOfTurns = 0
 
         # Keep track of the last moves performed
@@ -242,8 +245,8 @@ class Game:
                         self.p1.pieces.remove( pieceToRemove )
                 except Exception as exc:
                     print (pieceToRemove.name, pieceToRemove.color, pieceToRemove.x, pieceToRemove.y )
-                    print (pieceToMove.name, pieceToMove.color, pieceToMove.x, pieceToMove.y )
-                    pc.Piece.board.save( "Last board before error")
+                    print (pieceToMove.name, pieceToMove.color, pieceToMove.x, pieceToMove.y, newPosition )
+                    pc.Piece.board.save( "LastBoardBeforeError.csv" )
                     raise exc
                 pc.Piece.board.setPiece( newEmptyPiece )
 

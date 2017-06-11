@@ -11,7 +11,7 @@ class Neuron:
         """
         Evaluates the parameter z that is sent to the sigmoid function sigma(z) = 1/(1+exp(-z))
         """
-        return np.sum( self.weights*inputState ) - self.threshold
+        return (np.sum( self.weights*inputState )/len(self.weights) - self.threshold)
 
 class Layer:
     def __init__( self, nIn, nOut ):
@@ -49,15 +49,20 @@ class Network:
         self.layers = []
         for i in range(0,len(numberOfNeurons)-1):
             self.layers.append( Layer( int(numberOfNeurons[i]), int(numberOfNeurons[i+1]) ) )
-        self.learningRate = 0.1
-        self.stepsize = 0.5
-        self.gradient = np.zeros( self.getNumberOfParameters() )
-        self.previousGradient = np.zeros( self.getNumberOfParameters() )
-        self.previousValues = np.zeros( self.getNumberOfParameters() )
-        self.newValues = self.collectParameters()
-        self.currentIndx = 0
-        self.previousCostFunction = 1.0
-        self.hasNewWeights = True
+        self.generateNewInitialCondition = True
+        self.ga = GeneticAlgorithm( self, 10 )
+        self.numberOfGAGenerations = 100
+
+    def perturbNext( self, fitness ):
+        self.ga.nextChromosome( fitness )
+        if ( self.ga.currentGeneration >= self.numberOfGAGenerations ):
+            self.generateNewInitialCondition = True
+            self.ga.currentGeneration = 0
+
+    def setRandomThresholds( self ):
+        for layer in self.layers:
+            for neuron in layer.neurons:
+                neuron.threshold = np.random.normal(loc=0.0,scale=10.0)
 
     def getNumberOfParameters( self ):
         nParams = 0
@@ -108,44 +113,6 @@ class Network:
                 neuron.threshold = newvalues[current+len(neuron.weights)]
                 current += len(neuron.weights)+1
 
-    def updateGradient( self, newCostFuncValue ):
-        """
-        Updates the gradient based on the current value of the cost function
-        """
-        change = (newCostFuncValue - self.previousCostFunction)
-        self.gradient[self.currentIndx] = change/(self.stepsize)
-        self.currentIndx += 1
-        if ( self.currentIndx >= len(self.gradient) ):
-            self.updateWeights()
-
-    def updateWeights( self ):
-        """
-        When the full gradient has been determined, this function updates all the weights and thresholds
-        based on the gradient descent method
-        """
-        gradDiff = self.gradient - self.previousGradient
-        if ( np.sum(gradDiff**2) < 1E-7 ):
-            gamma = 0.0
-        else:
-            gamma = ( self.newValues - self.previousValues ).dot(gradDiff)
-            gamma /= np.sum(gradDiff**2)
-
-        self.previousValues[:] = self.newValues[:]
-        self.newValues = self.newValues - gamma*self.gradient
-        self.previousGradient[:] = self.gradient[:]
-        self.currentIndx = 0
-        self.hasNewWeights = True
-        self.distribute( self.newValues )
-
-    def perturbNext( self ):
-        """
-        Modifies the next weight/threshold. Successive calls to this function will eventually vary all the
-        weights and thresholds in the network
-        """
-        if ( self.currentIndx > 0 ):
-            self.newValues[self.currentIndx-1] -= self.stepsize
-        self.newValues[self.currentIndx] += self.stepsize
-
     def visualize( self ):
         """
         Create figure showing all the weights. Each subfigure corresponds to one layer
@@ -157,3 +124,86 @@ class Network:
             ax = fig.add_subplot(ncols,ncols,i+1)
             im = self.layers[i].visualize(ax)
             fig.colorbar(im)
+
+class GeneticAlgorithm:
+    def __init__( self, network, populationSize ):
+        self.network = network
+        self.populationSize = populationSize
+        self.population = np.zeros((self.network.getNumberOfParameters(),populationSize) )
+        self.generateNewInitialState()
+        self.fitness = np.zeros(populationSize)
+        self.currentChromosome = 0
+        self.numberOfParents = 4
+        self.mutationProbability = 0.05
+        self.currentGeneration = 0
+
+    def generateNewInitialState( self ):
+        mean = 0.0
+        # Want of the parameter z in each layer is in [-1,1]
+        sigma = 100.0
+        for i in range(0,self.population.shape[1]):
+            slope = 2.0*np.random.rand()-1.0
+            exp = np.random.rand()*2.0
+            self.population[0,i] = np.random.normal( loc=mean, scale=sigma )
+            for j in range(1, self.population.shape[0] ):
+                self.population[j,i] = self.population[j-1,i] + np.random.normal( loc=mean, scale=0.1*sigma )
+
+        # Set random threshols and write it back to the population array
+        for i in range(0,self.populationSize ):
+            self.network.distribute( self.population[:,i] )
+            self.network.setRandomThresholds()
+            self.population[:,i] -= np.mean( self.population[:,i] )
+            self.population[:,i] = self.network.collectParameters()
+            self.population[:,i] /= np.max( np.abs(self.population[:,i]) )
+        self.network.distribute( self.population[:,0] )
+
+    def nextChromosome( self, currentFitnessValue ):
+        self.fitness[self.currentChromosome] = currentFitnessValue
+        self.currentChromosome += 1
+        if ( self.currentChromosome >= self.populationSize ):
+            self.currentChromosome = 0
+            parents = self.selectParents()
+            self.mergeParents( parents )
+            self.mutate()
+            self.currentGeneration += 1
+            print()
+            print ("New generation created...")
+        chrom = self.population[:,self.currentChromosome]
+        self.network.distribute( self.population[:,self.currentChromosome] )
+
+    def selectParents( self ):
+        k = int(self.populationSize/4)
+        # Tournament selection
+        array = np.arange(self.populationSize, dtype=np.int32)
+        parents = []
+        for i in range(0,self.numberOfParents):
+            selected = np.random.randint(0,high=len(array),size=k)
+            fittest = -np.inf
+            fittestPop = 0
+            for num in selected:
+                if ( self.fitness[num] > fittest ):
+                    fittest = self.fitness[num]
+                    fittestPop = num
+            parents.append(num)
+            indx = np.argmin( np.abs(array-num) )
+            array = np.delete(array,indx)
+        return parents
+
+    def mergeParents( self, parents ):
+        parentsCopy = np.zeros((self.population.shape[0],len(parents)))
+        for i in range(0,len(parents) ):
+            parentsCopy[:,i] = self.population[:,parents[i]]
+
+        for i in range(0,self.population.shape[1]):
+            for j in range(0,self.population.shape[0] ):
+                selectedParent = np.random.randint(0,high=4)
+                self.population[j,i] = parentsCopy[j,selectedParent]
+
+    def mutate( self ):
+        for i in range(0,self.populationSize):
+            if ( np.random.rand() < self.mutationProbability ):
+                start = np.random.randint(0,self.population.shape[0] )
+                length = np.random.randint(0,self.population.shape[0]-start)
+                subarray = self.population[start:start+length,i]
+                np.random.shuffle(subarray)
+                self.population[start:start+length,i] = subarray
