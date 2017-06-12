@@ -1,0 +1,8 @@
+# The following files will be ignored
+boardLastInitialStateTraining.csv
+lastInitialState.pck
+lastState.csv
+lastState.jpg
+pycheckers/__pycache__/*
+trainedNetwork.pkl
+trainprofile.pyprof
