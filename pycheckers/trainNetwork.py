@@ -20,7 +20,7 @@ def main( argv ):
         network = pck.load( networkfile )
     except Exception as exc:
         print (str(exc))
-        neurons = [5*64,0.66*5*64,1]
+        neurons = [5*64,0.2*5*64,1]
         network = nn.Network( neurons )
     network.visualize()
     plt.show()
@@ -50,12 +50,8 @@ def main( argv ):
         randomStepCounter = 0
         while ( game.state != "finished" ):
             game.stepGame()
-            if ( counter%10 == 0 ):
-                game.p1.setRandomPolicy()
-                randomStepCounter = 0
-            randomStepCounter += 1
             counter += 1
-            if ( randomStepCounter >= 2 ):
+            if ( counter >= 4 ):
                 game.p1.setNeuralNetwork( network, game )
 
         singleGameTime = time.time() - singleGameStartTime

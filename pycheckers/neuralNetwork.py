@@ -11,13 +11,22 @@ class Neuron:
         """
         Evaluates the parameter z that is sent to the sigmoid function sigma(z) = 1/(1+exp(-z))
         """
-        return (np.sum( self.weights*inputState )/len(self.weights) - self.threshold)
+        return (np.sum( self.weights*inputState ) - self.threshold)
+
+class OutputNeuron:
+    def __init__(self):
+        pass
+    def evaluate( self, inputState ):
+        return inputState.mean()
 
 class Layer:
-    def __init__( self, nIn, nOut ):
+    def __init__( self, nIn, nOut, useOutputNeurons=False ):
         self.neurons = []
-        for i in range(0,int(nOut)):
-            self.neurons.append( Neuron(int(nIn)) )
+        if ( useOutputNeurons ):
+            self.neurons.append(OutputNeuron())
+        else:
+            for i in range(0,int(nOut)):
+                self.neurons.append( Neuron(int(nIn)) )
 
     def evaluate( self, inputState ):
         """
@@ -48,25 +57,38 @@ class Network:
     def __init__( self, numberOfNeurons ):
         self.layers = []
         for i in range(0,len(numberOfNeurons)-1):
-            self.layers.append( Layer( int(numberOfNeurons[i]), int(numberOfNeurons[i+1]) ) )
+            if ( numberOfNeurons[i] == 1 ):
+                self.layers.append( Layer( int(numberOfNeurons[i]), int(numberOfNeurons[i+1]) ), useOutputNeurons=True )
+            else:
+                self.layers.append( Layer( int(numberOfNeurons[i]), int(numberOfNeurons[i+1]) ) )
         self.generateNewInitialCondition = True
-        self.ga = GeneticAlgorithm( self, 10 )
+        self.ga = GeneticAlgorithm( self, 1000 )
         self.numberOfGAGenerations = 100
 
     def perturbNext( self, fitness ):
+        """
+        Use the next chromosome in the GA population
+        """
         self.ga.nextChromosome( fitness )
         if ( self.ga.currentGeneration >= self.numberOfGAGenerations ):
             self.generateNewInitialCondition = True
             self.ga.currentGeneration = 0
 
     def setRandomThresholds( self ):
+        """
+        Set random thresholds
+        """
         for layer in self.layers:
             for neuron in layer.neurons:
                 neuron.threshold = np.random.normal(loc=0.0,scale=10.0)
 
     def getNumberOfParameters( self ):
+        """
+        Get the total number of optimization parameters (weights and threshold)
+        """
         nParams = 0
-        for layer in self.layers:
+        for i in range(0,len(self.layers)-1):
+            layer = self.layers[i]
             for neuron in layer.neurons:
                 nParams += (len(neuron.weights)+1)
         return nParams
@@ -94,7 +116,8 @@ class Network:
         """
         params = np.zeros( self.getNumberOfParameters() )
         current = 0
-        for layer in self.layers:
+        for i in range(0,len(self.layers)-1):
+            layer = self.layers[i]
             for neuron in layer.neurons:
                 params[current:current+len(neuron.weights)] = neuron.weights
                 params[current+len(neuron.weights)] = neuron.threshold
@@ -107,7 +130,8 @@ class Network:
         """
         current = 0
         assert( len(newvalues) == self.getNumberOfParameters() )
-        for layer in self.layers:
+        for i in range(0,len(self.layers)-1):
+            layer = self.layers[i]
             for neuron in layer.neurons:
                 neuron.weights = newvalues[current:current+len(neuron.weights)]
                 neuron.threshold = newvalues[current+len(neuron.weights)]
@@ -138,32 +162,39 @@ class GeneticAlgorithm:
         self.currentGeneration = 0
 
     def generateNewInitialState( self ):
+        """
+        Initialize all weights and thresholds to random values
+        """
         mean = 0.0
         # Want of the parameter z in each layer is in [-1,1]
-        sigma = 100.0
+        sigma = 4.0
         for i in range(0,self.population.shape[1]):
             slope = 2.0*np.random.rand()-1.0
             exp = np.random.rand()*2.0
             self.population[0,i] = np.random.normal( loc=mean, scale=sigma )
             for j in range(1, self.population.shape[0] ):
-                self.population[j,i] = self.population[j-1,i] + np.random.normal( loc=mean, scale=0.1*sigma )
+                #self.population[j,i] = self.population[j-1,i] + np.random.normal( loc=mean, scale=0.1*sigma )
+                self.population[j,i] = np.random.normal( loc=mean, scale=sigma )
 
         # Set random threshols and write it back to the population array
-        for i in range(0,self.populationSize ):
-            self.network.distribute( self.population[:,i] )
-            self.network.setRandomThresholds()
-            self.population[:,i] -= np.mean( self.population[:,i] )
-            self.population[:,i] = self.network.collectParameters()
-            self.population[:,i] /= np.max( np.abs(self.population[:,i]) )
+        #for i in range(0,self.populationSize ):
+        #    self.network.distribute( self.population[:,i] )
+        #    self.network.setRandomThresholds()
+        #    self.population[:,i] -= np.mean( self.population[:,i] )
+        #    self.population[:,i] = self.network.collectParameters()
+        #    self.population[:,i] /= np.max( np.abs(self.population[:,i]) )
         self.network.distribute( self.population[:,0] )
 
     def nextChromosome( self, currentFitnessValue ):
+        """
+        Update the fitness of the current chromosome and make the next one active
+        If it is the last chromosome a new generation will be created
+        """
         self.fitness[self.currentChromosome] = currentFitnessValue
         self.currentChromosome += 1
         if ( self.currentChromosome >= self.populationSize ):
             self.currentChromosome = 0
-            parents = self.selectParents()
-            self.mergeParents( parents )
+            self.reproduce()
             self.mutate()
             self.currentGeneration += 1
             print()
@@ -172,38 +203,49 @@ class GeneticAlgorithm:
         self.network.distribute( self.population[:,self.currentChromosome] )
 
     def selectParents( self ):
-        k = int(self.populationSize/4)
-        # Tournament selection
-        array = np.arange(self.populationSize, dtype=np.int32)
+        """
+        Selects parants for a chromosome
+        """
+        # Roulette selection
         parents = []
+        fitnessCopy = []
         for i in range(0,self.numberOfParents):
-            selected = np.random.randint(0,high=len(array),size=k)
-            fittest = -np.inf
-            fittestPop = 0
-            for num in selected:
-                if ( self.fitness[num] > fittest ):
-                    fittest = self.fitness[num]
-                    fittestPop = num
-            parents.append(num)
-            indx = np.argmin( np.abs(array-num) )
-            array = np.delete(array,indx)
+            fitnessSum = np.sum(fitness)
+            random = np.random.rand(0.0,fitnessSum)
+            cumsum = 0.0
+            for i in range(0,len(fitness)):
+                cumsum += self.fitness[i]
+                if ( cumsum > random ):
+                    parents.append[i]
+                    fitnessCopy.append(self.fitness[i])
+
+                    # Set fitness to zero such that is not elected again
+                    self.fitness[i] = 0.0
+        # Reset the fitness
+        for i in range(0,len(parents)):
+            self.fitness[parents[i]] = fitnessCopy[i]
         return parents
 
-    def mergeParents( self, parents ):
-        parentsCopy = np.zeros((self.population.shape[0],len(parents)))
-        for i in range(0,len(parents) ):
-            parentsCopy[:,i] = self.population[:,parents[i]]
+    def reproduce( self ):
+        """
+        Produce a new generation
+        """
+        newGeneration = np.zeros(self.population.shape)
 
         for i in range(0,self.population.shape[1]):
+            parents = self.parents()
             for j in range(0,self.population.shape[0] ):
-                selectedParent = np.random.randint(0,high=4)
-                self.population[j,i] = parentsCopy[j,selectedParent]
+                selectedParent = np.random.randint(0,high=self.numberOfParents)
+                newGeneration[j,i] = self.population[j,parents[selectedParent]]
+        del self.population
+        self.population = newGeneration
 
     def mutate( self ):
+        """
+        Perform the mutation step. Mutation is done by assigning a random value to the selected gene
+        """
         for i in range(0,self.populationSize):
-            if ( np.random.rand() < self.mutationProbability ):
-                start = np.random.randint(0,self.population.shape[0] )
-                length = np.random.randint(0,self.population.shape[0]-start)
-                subarray = self.population[start:start+length,i]
-                np.random.shuffle(subarray)
-                self.population[start:start+length,i] = subarray
+            for j in range(0,self.population.shape[0]):
+                if ( np.random.rand() < self.mutationProbability ):
+                    stddev = np.std( self.population.ravel() )
+                    self.population[j,i] = np.random.normal(loc=self.population[j,i],scale=std )

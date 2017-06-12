@@ -287,20 +287,20 @@ class CleverMover(MovePolicy):
         self.newPosition = None
 
     def boardToInputState( self ):
-        inputState = np.zeros(5*64)
+        inputState = np.zeros(5*64)-0.25
         for i in range(0,8):
             for j in range(0,8):
                 indx = i*8+j
                 piece = pc.Piece.board.getPiece(i,j)
                 if ( piece.name == "empty" ):
                     inputState[indx] = 1.0
-                elif ( piece.name == "man" and piece.color == "white" ):
+                elif ( piece.name == "man" and piece in self.pieces ):
                     inputState[indx+1] = 1.0
-                elif ( piece.name == "king" and piece.color == "white" ):
+                elif ( piece.name == "king" and piece in self.pieces ):
                     inputState[indx+2] = 1.0
-                elif ( piece.name == "man" and piece.color == "black" ):
+                elif ( piece.name == "man" ):
                     inputState[indx+3] = 1.0
-                elif ( piece.name == "king" and piece.color == "black" ):
+                elif ( piece.name == "king" ):
                     inputState[indx+4] = 1.0
                 else:
                     raise Exception( "Error when converting the board to input state for the neural network")
