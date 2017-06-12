@@ -3,6 +3,9 @@ import numpy as np
 import neuralNetwork as nn
 
 class Player:
+    """
+    Class describing players
+    """
     def __init__( self ):
         self.name = "NN"
         self.pieces = []
@@ -11,23 +14,41 @@ class Player:
         self.winner = False
 
     def setHumanUser( self ):
+        """
+        The player should take its input from a Human user
+        """
         self.movePolicy = HumanUser(self.pieces)
 
     def setNeuralNetwork( self, network, game ):
+        """
+        The player should base its move on a neural network
+        """
         self.movePolicy = CleverMover( self.pieces, network, game )
 
     def setRandomPolicy( self ):
+        """
+        The player should perform random moves
+        """
         self.movePolicy = RandomMover( self.pieces )
 
 class MovePolicy():
+    """
+    Base class for move policies
+    """
     def __init__( self, pieces ):
         self.state = "OK"
         self.pieces = pieces
 
     def getMove( self ):
+        """
+        Return the selected move
+        """
         raise NotImplementedError( "Childs have to implement this function!" )
 
     def checkForAvailableMoves( self ):
+        """
+        Return True if the player has available moves
+        """
         moves = []
         for piece in self.pieces:
             moves, tree = piece.validMoves()
@@ -36,11 +57,17 @@ class MovePolicy():
         self.state = "noAvailableMoves"
 
 class RandomMover(MovePolicy):
+    """
+    Class for random moves
+    """
     def __init__( self, pieces ):
         super().__init__(pieces)
         pass
 
     def getMove( self ):
+        """
+        Returns a random, but valid move
+        """
         maxIter = 1000
         for i in range(0,maxIter):
             pieceIndx = np.random.randint(0, high=len(self.pieces) )
@@ -53,6 +80,9 @@ class RandomMover(MovePolicy):
         return None,[],None
 
 class HumanUser(MovePolicy):
+    """
+    Human user
+    """
     def __init__( self, pieces ):
         super().__init__(pieces)
         self.selectedPiece = None
@@ -60,11 +90,17 @@ class HumanUser(MovePolicy):
         self.catchTree = None
 
     def selectPiece( self, x, y ):
+        """
+        Select the piece located at position (x,y)
+        """
         for piece in self.pieces:
             if ( piece.x == x ) and ( piece.y == y ):
                 self.selectedPiece = piece
 
     def selecteNewPosition( self, x, y ):
+        """
+        Select position to move the selected piece to
+        """
         if ( self.selectedPiece is None ):
             return
         valid, self.catchTree = self.selectedPiece.validMoves()
@@ -72,6 +108,9 @@ class HumanUser(MovePolicy):
             self.newPosition = [x,y]
 
     def getMove( self ):
+        """
+        Return the selected move
+        """
         if ( self.selectedPiece is None ):
             raise Exception( "No piece is selected!" )
         if ( self.newPosition is None ):
@@ -79,6 +118,9 @@ class HumanUser(MovePolicy):
         return self.selectedPiece, self.newPosition, self.catchTree
 
 class Game:
+    """
+    Main class for the game
+    """
     def __init__( self ):
         self.p1 = Player()
         self.p2 = Player()
@@ -99,6 +141,9 @@ class Game:
         self.state = "playing"
 
     def printResult( self ):
+        """
+        Print the winner, loser (or draw)
+        """
         if ( self.p1.winner ):
             print ("Player: %s won"%(self.p1.name))
         elif ( self.p2.winner ):
@@ -107,6 +152,10 @@ class Game:
             print ("Ended with draw!")
 
     def setupGame( self ):
+        """
+        Initialize the game, has to be called before the game is started
+        and should only be called once
+        """
         # Fill board with empty
         for i in range(0,8):
             for j in range(0,8):
@@ -142,6 +191,9 @@ class Game:
         #pc.Piece.board.printOut()
 
     def stepGame( self ):
+        """
+        Perform one move
+        """
         self.numberOfTurns += 1
         piece, newmove, catchTree = self.playerToMove.movePolicy.getMove()
         if ( self.playerToMove.movePolicy.state == "noAvailableMoves" ):
@@ -175,6 +227,10 @@ class Game:
             self.state = "finished"
 
     def undoMove( self ):
+        """
+        Undo last move. Note that only one move is stored so succesive calls
+        to this function will not redo moves.
+        """
         newEmptyPiece = pc.Piece()
         newEmptyPiece.x = self.pieceMoved.x
         newEmptyPiece.y = self.pieceMoved.y
@@ -201,6 +257,9 @@ class Game:
         pc.Piece.board.checkConsistency( self.p2 )
 
     def move( self, pieceToMove, newPosition, catchTree ):
+        """
+        Move a piece
+        """
         self.newKing = None
         if ( pieceToMove is None ):
             return
@@ -279,6 +338,9 @@ class Game:
             pc.Piece.board.setPiece(newKing)
 
 class CleverMover(MovePolicy):
+    """
+    Move based on the neural network
+    """
     def __init__(self, pieces, network, game ):
         super().__init__(pieces)
         self.network = network
@@ -287,6 +349,9 @@ class CleverMover(MovePolicy):
         self.newPosition = None
 
     def boardToInputState( self ):
+        """
+        Translate the current board state to an input to the neural network
+        """
         inputState = np.zeros(5*64)-0.25
         for i in range(0,8):
             for j in range(0,8):
@@ -307,6 +372,9 @@ class CleverMover(MovePolicy):
         return inputState
 
     def getMove( self ):
+        """
+        Return the selected move
+        """
         value = -np.inf
         selectedCatch = None
         foundMove = False
