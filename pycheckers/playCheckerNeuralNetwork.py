@@ -15,10 +15,11 @@ def main():
         network = nn.Network( neurons )
 
     app = pychgui.PyCheckerGUI()
-    app.game.p1.setHumanUser()
-    app.game.p2.setNeuralNetwork( network, app.game )
-    app.game.p1.name = "David Kleiven"
-    app.game.p2.name = "Computer"
+    app.game.p2.setHumanUser()
+    #app.game.p1.setNeuralNetwork( network, app.game )
+    app.game.p1.setAlphaBetaPolicy( 3, app.game )
+    app.game.p2.name = "David Kleiven"
+    app.game.p1.name = "Computer"
     app.saveLastState = True
     app.play()
 

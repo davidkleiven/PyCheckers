@@ -1,5 +1,7 @@
 import numpy as np
 import pygame as pg
+from matplotlib import pyplot as plt
+import time
 
 class MoveTree:
     def __init__( self ):
@@ -122,6 +124,8 @@ class QuarticMoveTreeEntry:
 class Board:
     def __init__(self):
         self.board = [[None]*8 for _ in range(8)]
+        self.fig = None
+        self.ax = None
 
     def getPiece( self, x, y ):
         assert( self.isInside(x,y) )
@@ -153,6 +157,27 @@ class Board:
         for piece in player.pieces:
             if ( piece != self.getPiece(piece.x,piece.y) ):
                 raise Exception("Player %s and board does not show the same!"%(player.name))
+
+    def quickShow( self ):
+        matrix = np.zeros((8,8))
+        for i in range(0,8):
+            for j in range(0,8):
+                p = self.getPiece(i,j)
+                if ( p.color == "white" and p.name == "man" ):
+                    matrix[i,j] = 1
+                elif ( p.color == "white" and p.name == "king" ):
+                    matrix[i,j] = 3
+                elif ( p.color == "black" and p.name == "man"):
+                    matrix[i,j] = -1
+                elif ( p.color == "black" and p.name == "king" ):
+                    matrix[i,j] = 1
+        if ( self.fig is None ):
+            plt.ion()
+            self.fig = plt.figure()
+            self.ax = self.fig.add_subplot(1,1,1)
+        self.ax.matshow(matrix.T)
+        self.fig.canvas.draw()
+        time.sleep(0.2)
 
 class Piece:
     board = Board() # All Pieces share the same board

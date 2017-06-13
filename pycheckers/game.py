@@ -2,6 +2,7 @@ import piece as pc
 import numpy as np
 import neuralNetwork as nn
 import copy as cp
+from matplotlib import pyplot as plt
 
 class Player:
     """
@@ -31,6 +32,11 @@ class Player:
         The player should perform random moves
         """
         self.movePolicy = RandomMover( self.pieces )
+
+    def setAlphaBetaPolicy( self, depth, game ):
+        if ( self == game.p2 ):
+            raise Exception("The Alpha-Beta pruing algorithm assumes that it is player 1. Set player 2 as another user and let Player 1 use the alpha-beta algorithm")
+        self.movePolicy = AlphaBetaPruning( self.pieces, depth, game )
 
 class MovePolicy():
     """
@@ -310,9 +316,11 @@ class Game:
                     else:
                         self.p1.pieces.remove( pieceToRemove )
                 except Exception as exc:
-                    print (pieceToRemove.name, pieceToRemove.color, pieceToRemove.x, pieceToRemove.y )
-                    print (pieceToMove.name, pieceToMove.color, pieceToMove.x, pieceToMove.y, newPosition )
-                    pc.Piece.board.save( "LastBoardBeforeError.csv" )
+                    print ("Remove: ", pieceToRemove.name, pieceToRemove.color, pieceToRemove.x, pieceToRemove.y )
+                    print ("By moving: ",pieceToMove.name, pieceToMove.color, pieceToMove.x, pieceToMove.y, newPosition )
+                    pc.Piece.board.quickShow()
+                    plt.savefig("LastBoardBeforeError.png")
+
                     raise exc
                 pc.Piece.board.setPiece( newEmptyPiece )
 
@@ -404,30 +412,42 @@ class CleverMover(MovePolicy):
         return self.selectedPiece, self.newPosition, selectedCatch
 
 class AlphaBetaPruning(MovePolicy):
-    def __init__(self, depth, game, player, opponentPlayer ):
+    def __init__(self, pieces, depth, game ):
+        super().__init__(pieces)
         self.game = game
         self.kingValue = 3.0 # Value of having one more king than the opponent
         self.manValue = 1.0  # Value of having one more man than the opponent
+        if ( depth < 1 ):
+            raise Exception("Depth has to be at least 1")
         self.depth = depth
-        self.player = player
-        self.opponent = opponentPlayer
 
     def getMove( self ):
         pieces = []
         bestMoves = []
         moveValue = []
-        for piece in self.player.pieces:
+        catchTrees = []
+        for piece in self.game.p1.pieces:
             valid, catchTree = piece.validMoves()
-            for move in valied:
+            #print (valid)
+            for move in valid:
                 value = self.evaluateTree( piece, move, catchTree )
+                pieces.append(piece)
+                moveValue.append(value)
+                bestMoves.append(move)
+                catchTrees.append(catchTree)
 
-    def evaluate( self ):
+        moveValue = np.array(moveValue, dtype=np.int32)
+        maxIndx = np.argmax(moveValue)
+        print (moveValue)
+        return pieces[maxIndx], bestMoves[maxIndx], catchTrees[maxIndx]
+
+    def evaluateScore( self ):
         score = 0
         for piece in self.game.p1.pieces:
             if ( piece.name == "man" ):
                 score += self.manValue
             elif ( piece.name == "king" ):
-                score += self.kinValue
+                score += self.kingValue
 
         for piece in self.game.p2.pieces:
             if ( piece.name == "man" ):
@@ -435,6 +455,121 @@ class AlphaBetaPruning(MovePolicy):
             elif ( piece.name == "king" ):
                 score -= self.kingValue
         return score
+
+    def updateParentsValue( self, current ):
+        current.value = self.evaluateScore()
+        if ( current.parent.maximizingPlayer ):
+            if ( current.value > current.parent.value ):
+                current.parent.value = current.value
+                current.parent.alpha = current.value
+        else:
+            if ( current.value < current.parent.value ):
+                current.parent.value = current.value
+                current.parent.beta = current.value
+
+    def evaluateTree( self, piece, move, catchTree ):
+        self.game.playerToMove = self.game.p1
+        self.game.move(piece, move, catchTree)
+        self.game.playerToMove = self.game.p2
+
+        root = AlphaBetaNode()
+        root.initChilds( self.game, self.game.p2 )
+        root.maximizingPlayer = True
+        current = root
+        maxIter = 100000
+        maximizingPlayer = True
+        newNodeCreated = False
+        for i in range(0, maxIter):
+            #pc.Piece.board.quickShow()
+            if ( current == root ):
+                if ( root.nextChildToCheck == len(root.potentialMoves) or root.beta <= root.alpha):
+                    self.game.undoMove() # UNDO the first move
+                    self.game.playerToMove = self.game.p1
+                    return root.value
+
+            if ( newNodeCreated ):
+                if ( current.maximizingPlayer ):
+                    current.initChilds( self.game, self.game.p2 )
+                    current.value = -np.inf
+                else:
+                    current.initChilds( self.game, self.game.p1 )
+                    current.value = np.inf
+
+            newNodeCreated = False
+            if ( current.level == self.depth ):
+                self.updateParentsValue( current )
+                self.game.undoMove()
+                if ( current.maximizingPlayer ):
+                    current.parent.beta = current.alpha
+                else:
+                    current.parent.alpha = current.beta
+                current = current.parent
+                continue
+
+            if ( current.beta <= current.alpha ):
+                self.game.undoMove()
+                self.updateParentsValue( current )
+                if ( current.maximizingPlayer ):
+                    current.parent.beta = current.alpha
+                else:
+                    current.parent.alpha = current.beta
+                current = current.parent
+                continue
+
+            # Loop over children
+            if ( current.nextChildToCheck < len(current.potentialMoves) ):
+                pToMove = current.potentialPieceToMove[current.nextChildToCheck]
+                move = current.potentialMoves[current.nextChildToCheck]
+                catchTree = current.potentialCatchTrees[current.nextChildToCheck]
+                current.nextChildToCheck += 1
+                self.game.move( pToMove, move, catchTree )
+                if ( current.maximizingPlayer ):
+                    self.game.playerToMove = self.game.p1
+                else:
+                    self.game.playerToMove = self.game.p2
+
+                newnode = AlphaBetaNode()
+                newnode.parent = current
+                newnode.level = current.level+1
+                newnode.maximizingPlayer = not current.maximizingPlayer
+                newnode.alpha = current.alpha
+                newnode.beta = current.beta
+                current = newnode
+                newNodeCreated = True
+                continue
+
+            # All childs have been checked
+            self.game.undoMove()
+            self.updateParentsValue( current )
+            if ( current.maximizingPlayer ):
+                current.parent.beta = current.alpha
+            else:
+                current.parent.alpha = current.beta
+            current = current.parent
+        raise Exception("Alpha-Beta pruning reached maximum number of iterations")
+
+
+class AlphaBetaNode:
+    def __init__(self):
+        self.nextChildToCheck = 0
+        self.level = 0
+        self.maximizingPlayer = True
+        self.parent = None
+        self.potentialMoves = []
+        self.potentialPieceToMove = []
+        self.potentialCatchTrees = []
+        self.children = []
+        self.alpha = -np.inf
+        self.beta = np.inf
+        self.value = 0.0
+
+    def initChilds( self, game, oppositePlayer ):
+        for piece in oppositePlayer.pieces:
+            valid, catchTree = piece.validMoves()
+            for move in valid:
+                self.potentialMoves.append(move)
+                self.potentialPieceToMove.append(piece)
+                self.potentialCatchTrees.append(catchTree)
 
 class GameStateTracker:
     def __init__( self, nStates ):
@@ -461,12 +596,3 @@ class GameState:
         self.piecesRemoved = []
         self.movedFrom = []
         self.newKing = None
-
-class AlphaBetaNode:
-    def __init__(self):
-        self.maxnode = True
-        self.parent = None
-        self.children = []
-        self.alpha = -np.inf
-        self.beta = np.inf
-        self.value = 0.0
