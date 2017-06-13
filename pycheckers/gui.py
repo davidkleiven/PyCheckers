@@ -19,6 +19,7 @@ class PyCheckerGUI:
         pg.display.set_caption("PyCheckers")
         self.pgclock = pg.time.Clock()
         self.highlightedTiles = []
+        self.undo = Button( self.screen, [550, 400], [100,40], "Undo" )
 
     def getTileSize( self ):
         return self.height/8
@@ -75,6 +76,12 @@ class PyCheckerGUI:
         if ( self.game.state == "finished" ):
             return
         pos = pg.mouse.get_pos()
+
+        # Check if it hit the undo button
+        if ( self.undo.isInside(pos) ):
+            self.game.undoMove()
+            return
+
 
         # Find tile
         x = int( pos[0]/self.getTileSize() )
@@ -148,6 +155,7 @@ class PyCheckerGUI:
                 self.drawBoard()
                 self.drawPieces()
                 self.updateMoveNumber()
+                self.undo.draw()
                 if ( self.game.state == "finished" ):
                     self.gameFinished()
                 pg.display.update()
@@ -159,3 +167,21 @@ class PyCheckerGUI:
             print (str(exc))
 
         pg.quit()
+
+class Button:
+    def __init__(self, screen, pos, dim, text ):
+        self.screen = screen
+        self.x = pos[0]
+        self.y = pos[1]
+        self.width = dim[0]
+        self.height = dim[1]
+        self.text = text
+
+    def draw( self ):
+        pg.draw.rect( self.screen, (100,100,100), (self.x, self.y, self.width, self.height) )
+        font = pg.font.SysFont('Comic Sans MS', 30)
+        textsurface = font.render(self.text, False, (0,40,0))
+        self.screen.blit(textsurface,(self.x+20, self.y+10))
+
+    def isInside( self, pos ):
+        return pos[0] >= self.x and pos[0] <= self.x+self.width and pos[1] >= self.y and pos[1] <= self.y+self.height

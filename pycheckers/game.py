@@ -1,6 +1,7 @@
 import piece as pc
 import numpy as np
 import neuralNetwork as nn
+import copy as cp
 
 class Player:
     """
@@ -132,6 +133,8 @@ class Game:
         self.maxTurns = 200
         self.numberOfTurns = 0
 
+        self.gsTracker = GameStateTracker(20)
+
         # Keep track of the last moves performed
         self.pieceMoved = None
         self.piecesRemoved = []
@@ -231,25 +234,27 @@ class Game:
         Undo last move. Note that only one move is stored so succesive calls
         to this function will not redo moves.
         """
+        gs = self.gsTracker.getPrevious()
         newEmptyPiece = pc.Piece()
-        newEmptyPiece.x = self.pieceMoved.x
-        newEmptyPiece.y = self.pieceMoved.y
-        self.pieceMoved.x = self.movedFrom[0]
-        self.pieceMoved.y = self.movedFrom[1]
-        pc.Piece.board.setPiece( self.pieceMoved )
+        newEmptyPiece.x = gs.pieceMoved.x
+        newEmptyPiece.y = gs.pieceMoved.y
+        gs.pieceMoved.x = gs.movedFrom[0]
+        gs.pieceMoved.y = gs.movedFrom[1]
+        pc.Piece.board.setPiece( gs.pieceMoved )
         pc.Piece.board.setPiece( newEmptyPiece )
 
-        if ( self.playerToMove == self.p1 ):
+        if ( gs.playerToMove == self.p1 ):
             playerLosingPiece = self.p2
         else:
             playerLosingPiece = self.p1
+        self.playerToMove = gs.playerToMove
 
-        if ( not self.newKing is None ):
-            self.playerToMove.pieces.remove(self.newKing)
-            self.newKing = None
-            self.playerToMove.pieces.append(self.pieceMoved)
+        if ( not gs.newKing is None ):
+            gs.playerToMove.pieces.remove(gs.newKing)
+            gs.newKing = None
+            gs.playerToMove.pieces.append(gs.pieceMoved)
 
-        for piece in self.piecesRemoved:
+        for piece in gs.piecesRemoved:
             playerLosingPiece.pieces.append(piece)
             pc.Piece.board.setPiece(piece)
 
@@ -260,6 +265,8 @@ class Game:
         """
         Move a piece
         """
+        gs = GameState()
+        gs.playerToMove = self.playerToMove
         self.newKing = None
         if ( pieceToMove is None ):
             return
@@ -273,9 +280,9 @@ class Game:
             exit()
             return
         pieceCaptured = np.abs( newPosition[1] - pieceToMove.y ) > 1
-        self.movedFrom = [pieceToMove.x,pieceToMove.y]
-        self.pieceMoved = pieceToMove
-        self.piecesRemoved = []
+        gs.movedFrom = [pieceToMove.x,pieceToMove.y]
+        gs.pieceMoved = pieceToMove
+        gs.piecesRemoved = []
 
         if ( pieceCaptured ):
             moves = catchTree.getPath( newPosition[0], newPosition[1] )
@@ -286,7 +293,7 @@ class Game:
                 newEmptyPiece.x = middleX
                 newEmptyPiece.y = middleY
                 pieceToRemove = pc.Piece.board.getPiece(middleX,middleY)
-                self.piecesRemoved.append(pieceToRemove)
+                gs.piecesRemoved.append(pieceToRemove)
                 if ( pieceToRemove.name == "empty" or pieceToRemove.color == pieceToMove.color ):
                     print ("==== ERROR INFORMATION ======")
                     print (moves)
@@ -316,6 +323,7 @@ class Game:
         pieceToMove.y = newPosition[1]
         pc.Piece.board.setPiece( pieceToMove )
         pc.Piece.board.setPiece( copy )
+        self.gsTracker.addState( gs )
         #pc.Piece.board.save("lastState.csv")
 
         if ( pieceToMove.color == "white" and newPosition[1] == 7 and pieceToMove.name != "king" ):
@@ -325,7 +333,7 @@ class Game:
             newKing.x = newPosition[0]
             newKing.y = newPosition[1]
             self.playerToMove.pieces.append(newKing)
-            self.newKing = newKing
+            gs.newKing = newKing
             pc.Piece.board.setPiece(newKing)
         elif ( pieceToMove.color == "black" and newPosition[1] == 0 and pieceToMove.name != "king" ):
             self.playerToMove.pieces.remove(pieceToMove)
@@ -334,7 +342,7 @@ class Game:
             newKing.x = newPosition[0]
             newKing.y = newPosition[1]
             self.playerToMove.pieces.append( newKing )
-            self.newKing = newKing
+            gs.newKing = newKing
             pc.Piece.board.setPiece(newKing)
 
 class CleverMover(MovePolicy):
@@ -394,3 +402,71 @@ class CleverMover(MovePolicy):
         if ( not foundMove ):
             self.state = "noAvailableMoves"
         return self.selectedPiece, self.newPosition, selectedCatch
+
+class AlphaBetaPruning(MovePolicy):
+    def __init__(self, depth, game, player, opponentPlayer ):
+        self.game = game
+        self.kingValue = 3.0 # Value of having one more king than the opponent
+        self.manValue = 1.0  # Value of having one more man than the opponent
+        self.depth = depth
+        self.player = player
+        self.opponent = opponentPlayer
+
+    def getMove( self ):
+        pieces = []
+        bestMoves = []
+        moveValue = []
+        for piece in self.player.pieces:
+            valid, catchTree = piece.validMoves()
+            for move in valied:
+                value = self.evaluateTree( piece, move, catchTree )
+
+    def evaluate( self ):
+        score = 0
+        for piece in self.game.p1.pieces:
+            if ( piece.name == "man" ):
+                score += self.manValue
+            elif ( piece.name == "king" ):
+                score += self.kinValue
+
+        for piece in self.game.p2.pieces:
+            if ( piece.name == "man" ):
+                score -= self.manValue
+            elif ( piece.name == "king" ):
+                score -= self.kingValue
+        return score
+
+class GameStateTracker:
+    def __init__( self, nStates ):
+        self.nStates = nStates
+        self.states = [None]*self.nStates
+        self.next = 0
+
+    def addState( self, gs ):
+        self.states[self.next] = gs
+        self.next += 1
+        self.next = self.next%self.nStates
+
+    def getPrevious( self ):
+        prev = self.next-1
+        if ( prev < 0 ):
+            prev += self.nStates
+        self.next = prev
+        return self.states[prev]
+
+class GameState:
+    def __init__( self ):
+        self.playerMoved = None
+        self.pieceMoved = None
+        self.piecesRemoved = []
+        self.movedFrom = []
+        self.newKing = None
+
+class AlphaBetaNode:
+    def __init__(self):
+        self.maxnode = True
+        self.parent = None
+        self.children = []
+        self.alpha = -np.inf
+        self.beta = np.inf
+        self.value = 0.0
